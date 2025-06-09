@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from pyproj import Transformer
 
 def cargar_datos_vuelo(archivo):
 
@@ -25,3 +26,10 @@ def cargar_datos_vuelo(archivo):
     }
 
     return datos
+
+def convertir_a_metros(lat, lon):
+    transformer = Transformer.from_crs("EPSG:4326", "EPSG:32719", always_xy=True)
+    x, y = transformer.transform(lon, lat)
+    x = x - x[0]#obtener los metros recorridos desde 0,0
+    y = y - y[0]
+    return x, y

@@ -33,3 +33,17 @@ def convertir_a_metros(lat, lon):
     x = x - x[0]#obtener los metros recorridos desde 0,0
     y = y - y[0]
     return x, y
+
+def integrar(tiempo, acc):
+ 
+    dt = np.gradient(tiempo)  # diferencias de tiempo 
+    velocidad = np.zeros_like(acc)
+    posicion  = np.zeros_like(acc)  
+
+    for i in range(1, len(tiempo)):
+        velocidad[i] = velocidad[i-1] + acc[i] * dt[i] #v = v0 + a · Δt
+        posicion[i]  = posicion[i-1] + velocidad[i] * dt[i]
+    
+    return velocidad, posicion
+
+

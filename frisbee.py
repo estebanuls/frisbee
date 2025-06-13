@@ -37,6 +37,26 @@ def convertir_a_metros(lat, lon):
     y = y - y[0]
     return x, y
 
+def estimar_orientacion(tiempo, giroscopio):
+    dt = np.gradient(tiempo)
+    orientaciones = [R.identity()]
+    q = R.identity()
+    for i in range(1, len(tiempo)):
+        omega = giroscopio[i]
+        angulo = np.linalg.norm(omega * dt[i])
+        if angulo > 0:
+            eje = omega / np.linalg.norm(omega)
+            rot = R.from_rotvec(eje * angulo)
+            q = q * rot
+        orientaciones.append(q)
+    return orientaciones
+    
+def transformar_aceleracion(aceleracion, orientaciones):
+    acc_inercial = np.zeros_like(aceleracion)
+    for i in range(len(aceleracion)):
+        acc_inercial[i] = orientaciones[i].apply(aceleracion[i])
+    return acc_inercial
+
 def integrar(tiempo, acc):
     dt = np.gradient(tiempo)
     velocidad = np.zeros_like(acc)

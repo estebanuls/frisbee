@@ -50,4 +50,9 @@ def integrar(tiempo, acc):
 
 def animar_trayectoria_2d(x, y, intervalo=50):
     fig, ax = plt.subplots()
+    ax.set_xlim(min(x)-5, max(x)+5)
+    ax.set_ylim(min(y)-5, max(y)+5)
+    ax.set_xlabel("X (m)")
+    ax.set_ylabel("Y (m)")
+    ax.set_title("Animación 2D del vuelo del frisbi")
     plt.show()

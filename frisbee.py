@@ -3,6 +3,7 @@ import numpy as np
 from pyproj import Transformer
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from scipy.spatial.transform import Rotation as R
 
 def cargar_datos_vuelo(archivo):
 
@@ -37,16 +38,17 @@ def convertir_a_metros(lat, lon):
     return x, y
 
 def integrar(tiempo, acc):
- 
-    dt = np.gradient(tiempo)  # diferencias de tiempo 
+    dt = np.gradient(tiempo)
     velocidad = np.zeros_like(acc)
-    posicion  = np.zeros_like(acc)  
-
     for i in range(1, len(tiempo)):
-        velocidad[i] = velocidad[i-1] + acc[i] * dt[i] #v = v0 + a · Δt
-        posicion[i]  = posicion[i-1] + velocidad[i] * dt[i]
-    
-    return velocidad, posicion
+        velocidad[i] = velocidad[i-1] + acc[i] * dt[i]
+    return velocidad
+   
+def transformar_aceleracion(aceleracion, orientaciones):
+    acc_inercial = np.zeros_like(aceleracion)
+    for i in range(len(aceleracion)):
+        acc_inercial[i] = orientaciones[i].apply(aceleracion[i])
+    return acc_inercial
 
 def animar_trayectoria_2d(x, y, intervalo=50):
     fig, ax = plt.subplots()

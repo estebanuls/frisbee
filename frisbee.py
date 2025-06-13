@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 from pyproj import Transformer
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 def cargar_datos_vuelo(archivo):
 
@@ -46,4 +48,6 @@ def integrar(tiempo, acc):
     
     return velocidad, posicion
 
-
+def animar_trayectoria_2d(x, y, intervalo=50):
+    fig, ax = plt.subplots()
+    plt.show()

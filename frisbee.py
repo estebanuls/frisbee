@@ -36,7 +36,7 @@ def convertir_a_metros(lat, lon):
     x = x - x[0]#obtener los metros recorridos desde 0,0
     y = y - y[0]
     return x, y
-
+"""
 def estimar_orientacion(tiempo, giroscopio):
     dt = np.gradient(tiempo)
     orientaciones = [R.identity()]
@@ -50,6 +50,15 @@ def estimar_orientacion(tiempo, giroscopio):
             q = q * rot
         orientaciones.append(q)
     return orientaciones
+
+def crear_disco():
+    theta = np.linspace(0, 2*np.pi, 32)
+    r = 0.15
+    x = r * np.cos(theta)
+    y = r * np.sin(theta)
+    z = np.zeros_like(x)
+    return np.stack((x, y, z), axis=-1)
+"""
     
 def transformar_aceleracion(aceleracion, orientaciones):
     acc_inercial = np.zeros_like(aceleracion)
@@ -64,11 +73,6 @@ def integrar(tiempo, acc):
         velocidad[i] = velocidad[i-1] + acc[i] * dt[i]
     return velocidad
    
-def transformar_aceleracion(aceleracion, orientaciones):
-    acc_inercial = np.zeros_like(aceleracion)
-    for i in range(len(aceleracion)):
-        acc_inercial[i] = orientaciones[i].apply(aceleracion[i])
-    return acc_inercial
 
 def animar_trayectoria_2d(x, y, intervalo=50):
     fig, ax = plt.subplots()

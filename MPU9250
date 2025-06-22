@@ -1,0 +1,94 @@
+#include <Wire.h>
+
+// Dirección I2C del MPU9250
+#define MPU9250_ADDR 0x68
+
+// Registros
+#define ACCEL_XOUT_H 0x3B
+#define GYRO_XOUT_H  0x43
+
+// Factores de escala
+#define AFS_2G  16384.0 // Acelerómetro a 2g
+#define FS_250DPS 131.0 // Giroscopio a 250°/s
+
+// Conversión radianes a grados
+#define RAD_TO_DEG 57.295779
+
+// Variables para almacenar valores RAW
+int16_t AcX, AcY, AcZ, GyX, GyY, GyZ;
+
+// Ángulos calculados
+float Acc[2];     // [Roll, Pitch] desde acelerómetro
+float Gy[3];      // [Roll, Pitch, Yaw] desde giroscopio
+float Angle[3];   // [Roll, Pitch, Yaw] fusionados
+
+String valores;
+long tiempo_prev;
+float dt;
+
+// Pines I2C personalizados
+#define SDA_PIN GPIO_NUM_21
+#define SCL_PIN GPIO_NUM_22
+
+void setup() {
+  // Iniciar I2C con pines personalizados
+  Wire.begin(SDA_PIN, SCL_PIN);
+
+  Serial.begin(115200);
+
+  // Reiniciar MPU9250
+  Wire.beginTransmission(MPU9250_ADDR);
+  Wire.write(0x6B);  // Registro de energía
+  Wire.write(0);     // Salir del modo sleep
+  Wire.endTransmission(true);
+
+  tiempo_prev = millis(); // Inicializar temporizador
+
+  Serial.println("MPU9250 iniciado");
+}
+
+void loop() {
+  // === Leer acelerómetro ===
+  Wire.beginTransmission(MPU9250_ADDR);
+  Wire.write(ACCEL_XOUT_H);
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU9250_ADDR, 6, true);
+  AcX = Wire.read() << 8 | Wire.read();
+  AcY = Wire.read() << 8 | Wire.read();
+  AcZ = Wire.read() << 8 | Wire.read();
+
+  // Cálculo de ángulos desde acelerómetro
+  Acc[1] = atan(-AcX / sqrt(pow(AcY, 2) + pow(AcZ, 2))) * RAD_TO_DEG;
+  Acc[0] = atan(AcY / sqrt(pow(AcX, 2) + pow(AcZ, 2))) * RAD_TO_DEG;
+
+  // === Leer giroscopio ===
+  Wire.beginTransmission(MPU9250_ADDR);
+  Wire.write(GYRO_XOUT_H);
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU9250_ADDR, 6, true);
+  GyX = Wire.read() << 8 | Wire.read();
+  GyY = Wire.read() << 8 | Wire.read();
+  GyZ = Wire.read() << 8 | Wire.read();
+
+  // Escalar valores
+  Gy[0] = GyX / FS_250DPS;
+  Gy[1] = GyY / FS_250DPS;
+  Gy[2] = GyZ / FS_250DPS;
+
+  // === Calcular delta tiempo ===
+  dt = (millis() - tiempo_prev) / 1000.0;
+  tiempo_prev = millis();
+
+  // === Filtro complementario ===
+  Angle[0] = 0.98 * (Angle[0] + Gy[0] * dt) + 0.02 * Acc[0];
+  Angle[1] = 0.98 * (Angle[1] + Gy[1] * dt) + 0.02 * Acc[1];
+
+  // Integración simple del yaw (esto deriva con el tiempo)
+  Angle[2] += Gy[2] * dt;
+
+  // === Mostrar resultados ===
+  valores = "90," + String(Angle[0]) + "," + String(Angle[1]) + "," + String(Angle[2]) + ",-90";
+  Serial.println(valores);
+
+  delay(10);
+}

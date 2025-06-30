@@ -3,97 +3,71 @@ import numpy as np
 from pyproj import Transformer
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from mpl_toolkits.mplot3d import Axes3D
-from scipy.spatial.transform import Rotation as R
+from scipy.signal import medfilt
 
 def cargar_datos_gps(archivo_gps):
     tabla = pd.read_csv(archivo_gps)
-    tiempo = tabla["tiempo"].values
+    tabla = tabla[(tabla['lat'] != 0) & (tabla['lon'] != 0)]
+    tabla = tabla.drop_duplicates()
+
+    tiempo = tabla["tiempo"].values / 1000#convertir a seg
+    fecha = tabla["fecha"].values
     lat = tabla["lat"].values
     lon = tabla["lon"].values
-    alt = tabla["alt"].values
-    return tiempo, lat, lon, alt
-    
+    alt = tabla["alt"].astype(float).values
+
+    # Limpiar ruido GPS
+    lat, lon = limpiar_ruido_gps(lat, lon, tamano_ventana=5)
+
+    return tiempo, fecha, lat, lon, alt
+
 
 def convertir_a_metros(lat, lon):
     transformer = Transformer.from_crs("EPSG:4326", "EPSG:32719", always_xy=True)
     x, y = transformer.transform(lon, lat)
-    x = x - x[0]#obtener los metros recorridos desde 0,0
-    y = y - y[0]
+    x -= x[0]
+    y -= y[0]
     return x, y
-"""
-def estimar_orientacion(tiempo, giroscopio):
-    dt = np.gradient(tiempo)
-    orientaciones = [R.identity()]
-    q = R.identity()
-    for i in range(1, len(tiempo)):
-        omega = giroscopio[i]
-        angulo = np.linalg.norm(omega * dt[i])
-        if angulo > 0:
-            eje = omega / np.linalg.norm(omega)
-            rot = R.from_rotvec(eje * angulo)
-            q = q * rot
-        orientaciones.append(q)
-    return orientaciones
 
-def crear_disco():
-    theta = np.linspace(0, 2*np.pi, 32)
-    r = 0.15
-    x = r * np.cos(theta)
-    y = r * np.sin(theta)
-    z = np.zeros_like(x)
-    return np.stack((x, y, z), axis=-1)
-    
-def transformar_aceleracion(aceleracion, orientaciones):
-    acc_inercial = np.zeros_like(aceleracion)
-    for i in range(len(aceleracion)):
-        acc_inercial[i] = orientaciones[i].apply(aceleracion[i])
-    return acc_inercial
-    """
 
-def integrar(tiempo, acc):
-    dt = np.gradient(tiempo)
-    velocidad = np.zeros_like(acc)
-    for i in range(1, len(tiempo)):
-        velocidad[i] = velocidad[i-1] + acc[i] * dt[i]
-    return velocidad
+def limpiar_ruido_gps(lat, lon, tamano_ventana=5):
+    if tamano_ventana % 2 == 0:
+        raise ValueError("El tamaño de la ventana debe ser impar.")
+    lat_limpia = medfilt(lat, kernel_size=tamano_ventana)
+    lon_limpia = medfilt(lon, kernel_size=tamano_ventana)
+    return lat_limpia, lon_limpia
 
-def calcular_velocidad_GPS(x, y, z, tiempo):
+
+def calcular_velocidad(x, y, z, tiempo):
     dx = np.gradient(x, tiempo)
     dy = np.gradient(y, tiempo)
     dz = np.gradient(z, tiempo)
-    v = np.sqrt(dx**2 + dy**2 + dz**2)
-    return v
+    return np.sqrt(dx**2 + dy**2 + dz**2)
 
-def animar_trayectoria(x, y, z, tiempo, velocidad, intervalo=100):
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111, projection='3d')
 
+def animar_trayectoria_2d_lateral(x, z, tiempo, velocidad, cd, cl, intervalo=100):
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
     ax.set_xlim(np.min(x)-5, np.max(x)+5)
-    ax.set_ylim(np.min(y)-5, np.max(y)+5)
-    ax.set_zlim(np.min(z)-5, np.max(z)+5)
+    ax.set_ylim(np.min(z)-5, np.max(z)+5)
     ax.set_xlabel("X (m)")
-    ax.set_ylabel("Y (m)")
-    ax.set_zlabel("Altitud (m)")
-    ax.set_title("Trayectoria 3D del frisbee (GPS)")
+    ax.set_ylabel("Altitud (m)")
+    ax.set_title(f"Trayectoria Lateral (X-Z)\nCd={cd:.4f}, Cl={cl:.4f}")
+    ax.grid(True)
 
-    linea, = ax.plot([], [], [], 'b-', lw=2)
-    punto, = ax.plot([], [], [], 'ro', markersize=6)
-    texto = ax.text2D(0.02, 0.95, '', transform=ax.transAxes, fontsize=12)
+    linea, = ax.plot([], [], 'b-', lw=2)
+    punto, = ax.plot([], [], 'ro', markersize=6)
+    texto = ax.text(0.02, 0.95, '', transform=ax.transAxes, fontsize=12)
 
     def init():
         linea.set_data([], [])
-        linea.set_3d_properties([])
         punto.set_data([], [])
-        punto.set_3d_properties([])
         texto.set_text('')
         return linea, punto, texto
 
     def update(frame):
-        linea.set_data(x[:frame+1], y[:frame+1])
-        linea.set_3d_properties(z[:frame+1])
-        punto.set_data(x[frame], y[frame])
-        punto.set_3d_properties(z[frame])
+        linea.set_data(x[:frame+1], z[:frame+1])
+        punto.set_data([x[frame]], [z[frame]])
         texto.set_text(f't = {tiempo[frame]:.1f} s | v = {velocidad[frame]:.2f} m/s')
         return linea, punto, texto
 
@@ -102,14 +76,63 @@ def animar_trayectoria(x, y, z, tiempo, velocidad, intervalo=100):
     plt.tight_layout()
     plt.show()
 
+
+def estimar_coeficientes(tiempo, vx, vy):
+    dvx_dt = np.gradient(vx, tiempo)
+    dvy_dt = np.gradient(vy, tiempo) + 9.81  # g pasa al otro lado
+
+    A1 = np.stack([-vx, vy], axis=1)
+    B1 = dvx_dt
+
+    A2 = np.stack([vx, -vy], axis=1)
+    B2 = dvy_dt
+
+    A_total = np.concatenate([A1, A2], axis=0)
+    B_total = np.concatenate([B1, B2], axis=0)
+
+    validos = ~np.isnan(A_total).any(axis=1) & ~np.isinf(A_total).any(axis=1)
+    A_total = A_total[validos]
+    B_total = B_total[validos]
+
+    try:
+        coef, _, _, _ = np.linalg.lstsq(A_total, B_total, rcond=1e-6)
+        cd, cl = coef
+        return cd, cl
+    except np.linalg.LinAlgError:
+        print("Error: No se pudo resolver el sistema. Datos posiblemente sin variación.")
+        return float('nan'), float('nan')
+
+
 def main():
-    archivo_gps = "gps_simuladoo.csv"
-    tiempo, lat, lon, alt = cargar_datos_gps(archivo_gps)
+    archivo_gps = "datos_gps_corregido.csv"
+    tiempo, fecha, lat, lon, alt = cargar_datos_gps(archivo_gps)
+
     x, y = convertir_a_metros(lat, lon)
     z = alt - alt[0]
+
+    # Velocidades en cada eje
+    vx = np.gradient(x, tiempo)
+    vy = np.gradient(y, tiempo)
+    vz = np.gradient(z, tiempo)  # cambio de altitud
+
+    # Velocidad total
     velocidad = calcular_velocidad(x, y, z, tiempo)
-    animar_trayectoria_3d(x, y, z, tiempo, velocidad, intervalo=100)
+
+    cd, cl = estimar_coeficientes(tiempo, vx, vz)
+
+
+    # Estimación de coeficientes aerodinámicos
+    #cd, cl = estimar_coeficientes(tiempo, vx, vy)
+    print(f"Coeficiente de arrastre (cd): {cd:.4f}")
+    print(f"Coeficiente de sustentación (cl): {cl:.4f}")
+
+    duracion_total = tiempo[-1] - tiempo[0]
+    num_frames = len(tiempo)
+    intervalo = (duracion_total / num_frames) * 1000  # intervalo en ms
+
+    # Animación 2D lateral (X-Z)
+    animar_trayectoria_2d_lateral(x, z, tiempo, velocidad, cd, cl, intervalo=intervalo)
+
 
 if __name__ == "__main__":
     main()
-

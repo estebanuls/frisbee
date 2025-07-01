@@ -113,7 +113,7 @@ def main():
     # Velocidades en cada eje
     vx = np.gradient(x, tiempo)
     vy = np.gradient(y, tiempo)
-    vz = np.gradient(z, tiempo)  # cambio de altitud
+    vz = np.gradient(z, tiempo)
 
     # Velocidad total
     velocidad = calcular_velocidad(x, y, z, tiempo)
@@ -121,8 +121,6 @@ def main():
     cd, cl = estimar_coeficientes(tiempo, vx, vz)
 
 
-    # Estimación de coeficientes aerodinámicos
-    #cd, cl = estimar_coeficientes(tiempo, vx, vy)
     print(f"Coeficiente de arrastre (cd): {cd:.4f}")
     print(f"Coeficiente de sustentación (cl): {cl:.4f}")
 
